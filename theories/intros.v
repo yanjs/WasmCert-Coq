@@ -1,4 +1,4 @@
-From Wasm Require Export datatypes_properties operations typing opsem common.
+From Wasm Require Export datatypes_properties operations typing opsem common properties subtyping_properties typing_inversion instantiation_func.
 From mathcomp Require Import ssreflect ssrfun ssrnat ssrbool eqtype seq.
 From Coq Require Import Bool Program NArith ZArith Wf_nat.
 
@@ -17,7 +17,12 @@ Lemma opsem_reduce_seq1: forall hs1 s1 f1 es1 hs2 s2 f2 es2 es0,
       reduce hs1 s1 f1 es1 hs2 s2 f2 es2 ->
       reduce hs1 s1 f1 (es1 ++ es0) hs2 s2 f2 (es2 ++ es0).
 Proof.
-Admitted.
+  intros.
+  apply r_label with (es := es1) (es' := es2) (k := 0) (lh := LH_base [::] es0).
+  - apply H.
+  - auto.
+  - auto.
+Qed.
   
 (* The same applies for attaching a list of values on the left. *)
 Lemma opsem_reduce_seq2: forall hs1 s1 f1 es1 hs2 s2 f2 es2 vs,
@@ -25,7 +30,16 @@ Lemma opsem_reduce_seq2: forall hs1 s1 f1 es1 hs2 s2 f2 es2 vs,
     reduce hs1 s1 f1 es1 hs2 s2 f2 es2 ->
     reduce hs1 s1 f1 (vs ++ es1) hs2 s2 f2 (vs ++ es2).
 Proof.
-Admitted.
+  intros.
+  apply const_es_exists in H.
+  destruct H as [vs0 Hvs].
+  apply r_label with (es := es1) (es' := es2) (k := 0) (lh := LH_base vs0 [::]).
+  - apply H0.
+  - simpl.
+    rewrite -Hvs catA cats0 //.
+  - simpl.
+    rewrite -Hvs catA cats0 //.
+Qed.
 
 Variable hs: host_state.
 
@@ -39,6 +53,64 @@ Lemma opsem_reduce_seq2':
     reduce hs s1 f1 es1 hs s2 f2 es2 ->
     (reduce hs s1 f1 (es0 ++ es1) hs s2 f2 (es0 ++ es2) -> False)}.
 Proof.
+  right.
+  exists empty_store_record.
+  exists empty_frame.
+  exists [::].
+  exists empty_store_record.
+  exists empty_frame.
+  exists [::].
+  exists [:: AI_trap].
+  rewrite cats0.
+  intros.
+  apply reduce_not_nil in H.
+  apply H.
+  auto.
+Qed.
+
+(*
+Should be this?
+*)
+(* [nop] --reduce-> [] *)
+(* [trap;trap;nop]  no reduction rule to [trap;trap] *)
+Lemma opsem_reduce_seq2'':
+    {forall s1 f1 es1 s2 f2 es2 es0,
+    reduce hs s1 f1 es1 hs s2 f2 es2 ->
+    reduce hs s1 f1 (es0 ++ es1) hs s2 f2 (es0 ++ es2)} +
+    {exists s1 f1 es1 s2 f2 es2 es0,
+    (reduce hs s1 f1 es1 hs s2 f2 es2 ->
+     reduce hs s1 f1 (es0 ++ es1) hs s2 f2 (es0 ++ es2)) -> False}.
+Proof.
+  right.
+  exists empty_store_record.
+  exists empty_frame.
+  exists [::AI_basic BI_nop].
+  exists empty_store_record.
+  exists empty_frame.
+  exists [::].
+  exists [:: AI_trap; AI_trap].
+  rewrite cats0.
+  intros.
+  assert (reduce hs empty_store_record empty_frame [:: AI_basic BI_nop]
+    hs empty_store_record empty_frame [::]).
+  {
+    apply r_simple.
+    apply rs_nop.
+  }
+  apply H in H0.
+  inversion H0; subst.
+  - inversion H1; subst.
+    destruct vcs.
+    * inversion H1.
+    * inversion H1.
+      destruct vcs.
+      inversion H6.
+      inversion H6.
+      destruct vcs.
+      inversion H9.
+      inversion H9.
+      apply cat_cons_not_nil in H11; auto.
+  - (* ? *)
 Admitted.
 
 End intro_opsem.
@@ -60,7 +132,9 @@ Context `{ho: host}.
 Lemma subtypes_1:
   instr_subtyping (Tf nil [::T_num T_i32]) (Tf [::T_num T_i32] [::T_num T_i32; T_num T_i32]).
 Proof.
-Admitted.
+  apply instr_subtyping_weaken with (ts := [::T_num T_i32]).
+  apply instr_subtyping_eq.
+Qed.
 
 Notation "$N v" := (BI_const_num v) (at level 20).
 
@@ -70,7 +144,18 @@ Notation "$N v" := (BI_const_num v) (at level 20).
 Lemma types_composition: forall C c1 c2,
   be_typing C [:: $N (VAL_int32 c1); $N (VAL_int32 c2); BI_binop T_i32 (Binop_i BOI_add)] (Tf nil [::T_num T_i32]).
 Proof.
-Admitted.
+  intros.
+  eapply bet_composition with (e := BI_binop T_i32 (Binop_i BOI_add))
+    (es := [:: $N (VAL_int32 c1)] ++ [:: $N (VAL_int32 c2)]).
+  - eapply bet_composition with (e := $N (VAL_int32 c2)).
+    + apply bet_const_num.
+    + eapply bet_subtyping.
+      * apply bet_const_num.
+      * eapply instr_subtyping_weaken with (ts := [:: T_num (typeof_num (VAL_int32 c1))]).
+        apply instr_subtyping_eq.
+  - apply bet_binop.
+    apply Binop_i32_agree.
+Qed.
 
 (* The following 2 are slightly more difficult *)
 (* It is slightly awkward to apply the `bet_composition` rule, since it only
@@ -83,6 +168,37 @@ Lemma bet_composition2: forall C es1 es2 ts1 ts2 ts3,
     be_typing C es2 (Tf ts2 ts3) ->
     be_typing C (es1 ++ es2) (Tf ts1 ts3).
 Proof.
+  (**
+  induction es1.
+  - intros.
+    apply empty_typing in H.
+    eapply bet_subtyping.
+    + apply H0.
+    + simpl.
+      exists [::], [::], ts1, ts3.
+      repeat split; auto.
+      apply values_subtyping_eq.
+  - intros.
+    eapply IHes1.
+  *)
+  intros C es1 es2.
+  generalize dependent es1.
+  induction es2 using List.rev_ind.
+  - intros.
+    apply empty_typing in H0.
+    rewrite cats0.
+    eapply bet_subtyping.
+    + apply H.
+    + simpl.
+      exists [::], [::], ts1, ts3.
+      repeat split; auto.
+      apply values_subtyping_eq.
+  - intros.
+    rewrite catA.
+    eapply bet_composition.
+    + eapply IHes2.
+    + apply H.
+    (* todo *)
 Admitted.
 
 (* The following 'typing inversion lemma' is some sort of a converse to the
