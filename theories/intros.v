@@ -45,35 +45,9 @@ Variable hs: host_state.
 
 (* Is the above true without the const_list assumption?
    Prove or disprove it by establishing a witness to the following: *)
-Lemma opsem_reduce_seq2':
-    {forall s1 f1 es1 s2 f2 es2 es0,
-    reduce hs s1 f1 es1 hs s2 f2 es2 ->
-    reduce hs s1 f1 (es0 ++ es1) hs s2 f2 (es0 ++ es2)} +
-    {exists s1 f1 es1 s2 f2 es2 es0,
-    reduce hs s1 f1 es1 hs s2 f2 es2 ->
-    (reduce hs s1 f1 (es0 ++ es1) hs s2 f2 (es0 ++ es2) -> False)}.
-Proof.
-  right.
-  exists empty_store_record.
-  exists empty_frame.
-  exists [::].
-  exists empty_store_record.
-  exists empty_frame.
-  exists [::].
-  exists [:: AI_trap].
-  rewrite cats0.
-  intros.
-  apply reduce_not_nil in H.
-  apply H.
-  auto.
-Qed.
-
-(*
-Should be this?
-*)
 (* [nop] --reduce-> [] *)
 (* [trap;trap;nop]  no reduction rule to [trap;trap] *)
-Lemma opsem_reduce_seq2'':
+Lemma opsem_reduce_seq2':
     {forall s1 f1 es1 s2 f2 es2 es0,
     reduce hs s1 f1 es1 hs s2 f2 es2 ->
     reduce hs s1 f1 (es0 ++ es1) hs s2 f2 (es0 ++ es2)} +
@@ -98,20 +72,89 @@ Proof.
     apply rs_nop.
   }
   apply H in H0.
-  inversion H0; subst.
-  - inversion H1; subst.
-    destruct vcs.
-    * inversion H1.
-    * inversion H1.
-      destruct vcs.
-      inversion H6.
-      inversion H6.
-      destruct vcs.
-      inversion H9.
-      inversion H9.
-      apply cat_cons_not_nil in H11; auto.
-  - (* ? *)
-Admitted.
+  dependent induction H0.
+  - inversion H0; subst.
+  - apply extract_list3 in x0 as [H11 H12].
+    inversion H12.
+  - 
+    apply IHreduce; eauto.
+    induction lh.
+    + unfold lfill in x0.
+      unfold lfill in x.
+      destruct l.
+      simpl in x0.
+      * destruct es'. simpl in x.
+        rewrite x in x0.
+        assert (es ++ [:: AI_trap; AI_trap] = (es ++ [:: AI_trap]) ++ [:: AI_trap]). { rewrite -catA. by []. }
+        rewrite H1 in x0.
+        apply extract_list3 in x0.
+        destruct x0.
+        inversion H3.
+      * inversion x.
+        destruct es'.
+        simpl in H3.
+        rewrite H3 in x0.
+        apply extract_list3 in x0.
+        destruct x0. inversion H4.
+      * inversion H3.
+        apply cat0_inv in H5.
+        destruct H5.
+        subst.
+        rewrite cats0 in x0.
+        rewrite x0.
+        by [].
+      * inversion x0.
+        destruct v; unfold v_to_e in H2; inversion H2.
+        destruct v; unfold vref_to_e in H2; inversion H2.
+    + unfold lfill in x0.
+      destruct l.
+      * simpl in x0.
+        inversion x0.
+      * simpl in x0.
+        inversion x0.
+        destruct v; unfold v_to_e in H2; inversion H2.
+        destruct v; unfold vref_to_e in H2; inversion H2.
+(* The proof is too verbose. *)
+    induction lh.
+    + unfold lfill in x0.
+      unfold lfill in x.
+      destruct l.
+      simpl in x0.
+      * destruct es'. simpl in x.
+        rewrite x in x0.
+        assert (es ++ [:: AI_trap; AI_trap] = (es ++ [:: AI_trap]) ++ [:: AI_trap]). { rewrite -catA. by []. }
+        rewrite H1 in x0.
+        apply extract_list3 in x0.
+        destruct x0.
+        inversion H3.
+      * inversion x.
+        destruct es'.
+        simpl in H3.
+        rewrite H3 in x0.
+        apply extract_list3 in x0.
+        destruct x0. inversion H4.
+      * inversion H3.
+        apply cat0_inv in H5.
+        destruct H5.
+        subst. eauto.
+      * inversion x0.
+        destruct v; unfold v_to_e in H2; inversion H2.
+        destruct v; unfold vref_to_e in H2; inversion H2.
+    + unfold lfill in x0.
+      destruct l.
+      * simpl in x0.
+        inversion x0.
+      * simpl in x0.
+        inversion x0.
+        destruct v; unfold v_to_e in H2; inversion H2.
+        destruct v; unfold vref_to_e in H2; inversion H2.
+Qed.
+
+Inductive test_same : nat -> Prop :=
+  | ts_default n: test_same n -> test_same n.
+
+Print test_same_sind.
+Print test_same_ind.
 
 End intro_opsem.
 
