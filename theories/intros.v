@@ -211,38 +211,26 @@ Lemma bet_composition2: forall C es1 es2 ts1 ts2 ts3,
     be_typing C es2 (Tf ts2 ts3) ->
     be_typing C (es1 ++ es2) (Tf ts1 ts3).
 Proof.
-  (**
-  induction es1.
-  - intros.
-    apply empty_typing in H.
-    eapply bet_subtyping.
-    + apply H0.
-    + simpl.
-      exists [::], [::], ts1, ts3.
-      repeat split; auto.
-      apply values_subtyping_eq.
-  - intros.
-    eapply IHes1.
-  *)
-  intros C es1 es2.
-  generalize dependent es1.
-  induction es2 using List.rev_ind.
-  - intros.
-    apply empty_typing in H0.
+  intros until ts3.
+  dependent induction es2 using List.rev_ind.
+  - intros H112 H223.
+    apply empty_typing in H223.
     rewrite cats0.
     eapply bet_subtyping.
-    + apply H.
+    + apply H112.
     + simpl.
       exists [::], [::], ts1, ts3.
       repeat split; auto.
       apply values_subtyping_eq.
-  - intros.
+  - intros H112 H223.
     rewrite catA.
+    eapply be_composition_typing in H223 as [ts4 [H224 Hx43]].
     eapply bet_composition.
     + eapply IHes2.
-    + apply H.
-    (* todo *)
-Admitted.
+      apply H112.
+    + apply H224.
+    + apply Hx43.
+Qed.
 
 (* The following 'typing inversion lemma' is some sort of a converse to the
    one above. Prove it by an appropriate induction.
@@ -254,6 +242,20 @@ Lemma be_composition_inversion: forall C es1 es2 t1s t2s,
     exists t3s, be_typing C es1 (Tf t1s t3s) /\
            be_typing C es2 (Tf t3s t2s).
 Proof.
+  intros until t2s.
+  intros Hcat.
+  dependent induction es2 using List.rev_ind.
+  - exists t2s.
+    split.
+    + rewrite cats0 in Hcat.
+      apply Hcat.
+    + eapply bet_subtyping.
+      * apply bet_empty.
+      * simpl.
+        exists t2s, t2s, [::], [::].
+        repeat (split); try (rewrite cats0; auto).
+        apply values_subtyping_eq.
+    + (* TODO *)
 Admitted.
 
 End intro_types.
